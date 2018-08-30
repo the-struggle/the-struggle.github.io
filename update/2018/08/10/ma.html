@@ -63,211 +63,82 @@
                 <section>
     <div class="container">
         <header class="major">
-            <h2>A Working Example Strategy: Moving Average Crossover.</h2>
+            <h2>Back to moving averages.</h2>
                 <p class="post-meta">Aug 10, 2018</p>
         </header>
 
         <section class="post-content">
-            <p>As I discussed yesterday, I want to have a simple example strategy to use as a working example throughout this process. To that end, today I’ll download some data and discuss a simple strategy.</p>
+            <p>Soooooo, I kind of fell off the wagon and haven’t posted here in over a week. For good reason though! Worky reasons. In any case, I’m back and today I’m following up on moving average crossover.</p>
 
-<p>First, let’s load some modules and download the SandP.</p>
+<p>Last time I wrote about a moving average cross over strategy, which didn’t quite seem to work. I just want to touch back on this and point out why I think this wasn’t working. First of all, the portfolio was only investing one tenth of its cash, so of course returns were low! Here’s the code to reproduce the same graphs and statistics:</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="n">pd</span>
-<span class="n">pd</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">is_list_like</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">is_list_like</span>
-<span class="kn">from</span> <span class="nn">pandas_datareader</span> <span class="kn">import</span> <span class="n">data</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
-<span class="kn">import</span> <span class="nn">fix_yahoo_finance</span> <span class="k">as</span> <span class="n">yf</span>
-<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
-<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>  
+<p>```python
+import pandas as pd
+pd.core.common.is_list_like = pd.api.types.is_list_like
+from pandas_datareader import data
+import numpy as np
+import fix_yahoo_finance as yf
+import matplotlib.pyplot as plt
+%matplotlib inline</p>
 
-<span class="n">yf</span><span class="o">.</span><span class="n">pdr_override</span><span class="p">()</span>
+<p>yf.pdr_override()</p>
 
-<span class="c"># Download data</span>
-<span class="n">symbol</span> <span class="o">=</span> <span class="s">'SPY'</span>
-<span class="n">start_date</span> <span class="o">=</span> <span class="s">'2010-01-01'</span>
-<span class="n">end_date</span> <span class="o">=</span> <span class="s">'2016-01-01'</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_data_yahoo</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">start_date</span><span class="p">,</span> <span class="n">end_date</span><span class="p">)</span>
-</code></pre></div></div>
+<h1 id="download-data">Download data</h1>
+<p>symbol = ‘SPY’
+start_date = ‘2010-01-01’
+end_date = ‘2016-01-01’
+df = data.get_data_yahoo(symbol, start_date, end_date)</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[*********************100%***********************]  1 of 1 downloaded
-</code></pre></div></div>
+<h1 id="set-some-parameters">Set some parameters</h1>
+<p>short_average = 20
+long_average = 30</p>
 
-<p>Great! Now we’ve got the SPY for a few years. Now we can talk about the strategy we’ll use: moving average cross over. To use this strategy we need a couple of moving averages.</p>
+<h1 id="compute-the-moving-averages-and-add-to-dataframe">Compute the moving averages and add to dataframe</h1>
+<p># We’ll base them on the open
+ma_columns = [‘MA’ + str(short_average), ‘MA’ + str(long_average)]
+df[ma_columns[0]] = df.Open.rolling(short_average).mean()
+df[ma_columns[1]] = df.Open.rolling(long_average).mean()</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Set some parameters</span>
-<span class="n">short_average</span> <span class="o">=</span> <span class="mi">20</span>
-<span class="n">long_average</span> <span class="o">=</span> <span class="mi">30</span>
+<p>df[‘hold’] = 0
+# We want to hold the stock when the short is above the long
+df[‘hold’].iloc[long_average:] = \
+    np.where(df[ma_columns[0]].iloc[long_average:] &gt;
+             df[ma_columns[1]].iloc[long_average:], 1.0, 0.0)
+# We buy/sell when this holding changes, so we can simply
+# first difference it to get the signal
+df[‘signal’] = df[‘hold’].diff()</p>
 
-<span class="c"># Compute the moving averages and add to dataframe</span>
-<span class="c"># We'll base them on the open</span>
-<span class="n">ma_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">'MA'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">short_average</span><span class="p">),</span> <span class="s">'MA'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">long_average</span><span class="p">)]</span>
-<span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">short_average</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-<span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">long_average</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+<h1 id="how-much-money-should-we-start-with">How much money should we start with?</h1>
+<p>initial_capital = 10000.0</p>
 
-</code></pre></div></div>
+<h1 id="construct-our-position-as-10-shares-depending-on-our-hold">Construct our position as 10 shares depending on our hold</h1>
+<p>shares = 10
+positions = df[‘hold’]*shares</p>
 
-<p>Now let’s take a look at these series together.</p>
+<h1 id="compute-holdings-as-position-times-open-price-what-we-assume">Compute holdings as position times open price (what we assume</h1>
+<p># we buy and sell at)
+portfolio = pd.DataFrame()
+portfolio[‘holdings’] = positions.multiply(df[‘Open’], axis=0)</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">[[</span><span class="s">'Open'</span><span class="p">,</span> <span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]]</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
+<h1 id="add-a-cash-column-to-our-portfolio-this-is-our-starting">Add a cash column to our portfolio. This is our starting</h1>
+<p># salary less the purchase or sale of assets
+portfolio[‘cash’] = initial_capital - (positions.diff().fillna(0.0).multiply(df.Open)).cumsum()</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9cb07afb38&gt;
-</code></pre></div></div>
+<h1 id="compute-the-portfolio-value">Compute the portfolio value</h1>
+<p>portfolio[‘total’] = portfolio.sum(axis=1)</p>
 
-<p><img src="/images/MA_Crossover_files/MA_Crossover_6_1.png" alt="png" /></p>
+<h1 id="compute-percent-returns-per-day-and-over-the-lifetime">Compute percent returns per day and over the lifetime</h1>
+<p>portfolio.fillna(0.0)
+portfolio[‘daily_ret’] = portfolio[‘total’].pct_change()
+portfolio[‘cum_ret’] = (1 + portfolio[‘daily_ret’]).cumprod()</p>
 
-<p>Or if we zoom in…</p>
+<p>portfolio.total.plot()
+```</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">[[</span><span class="s">'Open'</span><span class="p">,</span> <span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="mi">100</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9cb053f710&gt;
-</code></pre></div></div>
-
-<p><img src="/images/MA_Crossover_files/MA_Crossover_8_1.png" alt="png" /></p>
-
-<p>The moving average cross over takes as buy signal any time the short average crosses the long average from below and a sell signal as any time it crosses from above. Here we see a buy and a sell signal.</p>
-
-<p>This is great! One thing we can go ahead and do is a bit of a naive simulation of what would happen if we were to trade on this strategy. To do this we can construct an indicator on whether or not we hold the stock, let’s call it  “hold”.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-</code></pre></div></div>
-
-<p>Now, we can compute the signal.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># We want to hold the stock when the short is above the long</span>
-<span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:]</span> <span class="o">=</span> \
-    <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:]</span> <span class="o">&gt;</span>
-             <span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:],</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<span class="c"># We buy/sell when this holding changes, so we can simply</span>
-<span class="c"># first difference it to get the signal</span>
-<span class="n">df</span><span class="p">[</span><span class="s">'signal'</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/home/tmabbot/anaconda3/lib/python3.5/site-packages/pandas/core/indexing.py:189: SettingWithCopyWarning:
-A value is trying to be set on a copy of a slice from a DataFrame
-
-See the caveats in the documentation: http://pandas.pydata.org/pandas-docs/stable/indexing.html#indexing-view-versus-copy
-  self._setitem_with_indexer(indexer, value)
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># To see how this works we can plot our processes and signal</span>
-<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">df</span><span class="p">[[</span><span class="s">'Open'</span><span class="p">,</span> <span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="mi">200</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">)</span>
-<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df</span><span class="o">.</span><span class="n">signal</span><span class="o">==</span><span class="mf">1.0</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
-        <span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df</span><span class="o">.</span><span class="n">signal</span><span class="o">==</span><span class="mf">1.0</span><span class="p">],</span>
-       <span class="s">'^'</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">'g'</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df</span><span class="o">.</span><span class="n">signal</span><span class="o">==-</span><span class="mf">1.0</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
-        <span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df</span><span class="o">.</span><span class="n">signal</span><span class="o">==-</span><span class="mf">1.0</span><span class="p">],</span>
-       <span class="s">'v'</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">'r'</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mi">103</span><span class="p">,</span> <span class="mi">122</span><span class="p">)</span>
-<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</code></pre></div></div>
-
-<p><img src="/images/MA_Crossover_files/MA_Crossover_13_0.png" alt="png" /></p>
-
-<p>You can see some examples of where we buy and sell. Now let’s construct a simple portfolio data frame based on this.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># How much money should we start with?</span>
-<span class="n">initial_capital</span> <span class="o">=</span> <span class="mf">10000.0</span>
-
-<span class="c"># Construct our position as 10 shares depending on our hold</span>
-<span class="n">shares</span> <span class="o">=</span> <span class="mi">10</span>
-<span class="n">positions</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">*</span><span class="n">shares</span>
-
-<span class="c"># Compute holdings as position times open price (what we assume</span>
-<span class="c"># we buy and sell at)</span>
-<span class="n">portfolio</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'holdings'</span><span class="p">]</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-
-<span class="c"># Add a cash column to our portfolio. This is our starting</span>
-<span class="c"># salary less the purchase or sale of assets</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'cash'</span><span class="p">]</span> <span class="o">=</span> <span class="n">initial_capital</span> <span class="o">-</span> <span class="p">(</span><span class="n">positions</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="p">))</span><span class="o">.</span><span class="n">cumsum</span><span class="p">()</span>
-
-<span class="c"># Compute the portfolio value</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'total'</span><span class="p">]</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
-<span class="c"># Compute percent returns per day and over the lifetime</span>
-<span class="n">portfolio</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'daily_ret'</span><span class="p">]</span> <span class="o">=</span> <span class="n">portfolio</span><span class="p">[</span><span class="s">'total'</span><span class="p">]</span><span class="o">.</span><span class="n">pct_change</span><span class="p">()</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'cum_ret'</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">portfolio</span><span class="p">[</span><span class="s">'daily_ret'</span><span class="p">])</span><span class="o">.</span><span class="n">cumprod</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">portfolio</span><span class="o">.</span><span class="n">total</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9cb04d2b38&gt;
-</code></pre></div></div>
-
-<p><img src="/images/MA_Crossover_files/MA_Crossover_16_1.png" alt="png" /></p>
-
-<p>That’s it! We’ve constructed a signal and seen how much it would have returned if we had followed that signal. It doesn’t work very well, wich is a bit disappointing, although this is a pretty basic strategy. Since we would have made $81\%$ by just holdig the stock, this is pretty horrible. One thing we could think about is if we tried optimizing, but that will have to wait for another day!</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">/</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0.8190122413499754
-</code></pre></div></div>
-
-<p>I think one reason why this strategy wasn’t very successful here is because it relies heavily on volatility. The more volatile a stock is the more these buy/sell orders are going to produce gains. A good example of this is the SPXL, which is a 3x leveraged sandp etf. Let’s do the same exercise for this guy!</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">old_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="c"># Download data</span>
-<span class="n">symbol</span> <span class="o">=</span> <span class="s">'SPXL'</span>
-<span class="n">start_date</span> <span class="o">=</span> <span class="s">'2010-01-01'</span>
-<span class="n">end_date</span> <span class="o">=</span> <span class="s">'2016-01-01'</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_data_yahoo</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">start_date</span><span class="p">,</span> <span class="n">end_date</span><span class="p">)</span>
-
-<span class="c"># Set some parameters</span>
-<span class="n">short_average</span> <span class="o">=</span> <span class="mi">20</span>
-<span class="n">long_average</span> <span class="o">=</span> <span class="mi">30</span>
-
-<span class="c"># Compute the moving averages and add to dataframe</span>
-<span class="c"># We'll base them on the open</span>
-<span class="n">ma_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">'MA'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">short_average</span><span class="p">),</span> <span class="s">'MA'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">long_average</span><span class="p">)]</span>
-<span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">short_average</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-<span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">long_average</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-
-<span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="c"># We want to hold the stock when the short is above the long</span>
-<span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:]</span> <span class="o">=</span> \
-    <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:]</span> <span class="o">&gt;</span>
-             <span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:],</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<span class="c"># We buy/sell when this holding changes, so we can simply</span>
-<span class="c"># first difference it to get the signal</span>
-<span class="n">df</span><span class="p">[</span><span class="s">'signal'</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span>
-
-<span class="c"># How much money should we start with?</span>
-<span class="n">initial_capital</span> <span class="o">=</span> <span class="mf">10000.0</span>
-
-<span class="c"># Construct our position as 10 shares depending on our hold</span>
-<span class="n">shares</span> <span class="o">=</span> <span class="mi">10</span>
-<span class="n">positions</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">*</span><span class="n">shares</span>
-
-<span class="c"># Compute holdings as position times open price (what we assume</span>
-<span class="c"># we buy and sell at)</span>
-<span class="n">portfolio</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'holdings'</span><span class="p">]</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-
-<span class="c"># Add a cash column to our portfolio. This is our starting</span>
-<span class="c"># salary less the purchase or sale of assets</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'cash'</span><span class="p">]</span> <span class="o">=</span> <span class="n">initial_capital</span> <span class="o">-</span> <span class="p">(</span><span class="n">positions</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="p">))</span><span class="o">.</span><span class="n">cumsum</span><span class="p">()</span>
-
-<span class="c"># Compute the portfolio value</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'total'</span><span class="p">]</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
-<span class="c"># Compute percent returns per day and over the lifetime</span>
-<span class="n">portfolio</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'daily_ret'</span><span class="p">]</span> <span class="o">=</span> <span class="n">portfolio</span><span class="p">[</span><span class="s">'total'</span><span class="p">]</span><span class="o">.</span><span class="n">pct_change</span><span class="p">()</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'cum_ret'</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">portfolio</span><span class="p">[</span><span class="s">'daily_ret'</span><span class="p">])</span><span class="o">.</span><span class="n">cumprod</span><span class="p">()</span>
-
-<span class="n">portfolio</span><span class="o">.</span><span class="n">total</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[*********************100%***********************]  1 of 1 downloaded
+<div class="highlighter-rouge"><pre class="highlight"><code>[*********************100%***********************]  1 of 1 downloaded
 
 
-/home/tmabbot/anaconda3/lib/python3.5/site-packages/pandas/core/indexing.py:189: SettingWithCopyWarning:
+/home/tmabbot/anaconda3/lib/python3.6/site-packages/pandas/core/indexing.py:194: SettingWithCopyWarning:
 A value is trying to be set on a copy of a slice from a DataFrame
 
 See the caveats in the documentation: http://pandas.pydata.org/pandas-docs/stable/indexing.html#indexing-view-versus-copy
@@ -277,30 +148,105 @@ See the caveats in the documentation: http://pandas.pydata.org/pandas-docs/stabl
 
 
 
-&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9cb0399240&gt;
-</code></pre></div></div>
+&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f387c3eabe0&gt;
+</code></pre>
+</div>
 
-<p><img src="/images/MA_Crossover_files/MA_Crossover_20_3.png" alt="png" /></p>
+<p><img src="notebook_files/notebook_1_3.png" alt="png" /></p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">/</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</code></pre></div></div>
+<p><code class="highlighter-rouge">python
+df[['Open', ma_columns[0], ma_columns[1]]].plot()
+</code></p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>3.6463353037909463
-</code></pre></div></div>
+<div class="highlighter-rouge"><pre class="highlight"><code>&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f387c5e75f8&gt;
+</code></pre>
+</div>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
+<p><img src="notebook_files/notebook_2_1.png" alt="png" /></p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9cb04c8a58&gt;
-</code></pre></div></div>
+<p>This strategy makes only four percent in six years, while just buying and holding makes 80 percent. Just increasing the number of shares will produce nearly 50 percent returns over the period.</p>
 
-<p><img src="/images/MA_Crossover_files/MA_Crossover_22_1.png" alt="png" /></p>
+<p>One issue is that two moving averages ignores that there are different wave-lengths of signal here. We can take this into account by adding a third moving average.</p>
 
-<p>What?! It’s even worse! Well, in fact the standard deviation of returns is lower, so this could be what is driving the lower performance.</p>
+<p>```python
+# Set some parameters
+long_long_average = 100</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">[</span><span class="s">'returns'</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">pct_change</span><span class="p">()</span>
-<span class="n">df</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
-</code></pre></div></div>
+<h1 id="compute-the-moving-averages-and-add-to-dataframe-1">Compute the moving averages and add to dataframe</h1>
+<p># We’ll base them on the open
+ma_columns.append(‘MA’ + str(long_long_average))
+df[ma_columns[2]] = df.Open.rolling(long_long_average).mean()
+df[‘hold’] = 0</p>
+
+<h1 id="we-want-to-hold-the-stock-when-the-short-is-above-the-long-and-the">We want to hold the stock when the short is above the long AND the</h1>
+<p># long is above the longlong
+df[‘hold’].iloc[long_long_average:] = \
+    np.where((df[ma_columns[0]].iloc[long_long_average:] &gt;
+              df[ma_columns[1]].iloc[long_long_average:]) &amp;
+             (df[ma_columns[1]].iloc[long_long_average:] &gt;
+              df[ma_columns[2]].iloc[long_long_average:]), 1.0, 0.0)</p>
+
+<h1 id="we-buysell-when-this-holding-changes-so-we-can-simply">We buy/sell when this holding changes, so we can simply</h1>
+<p># first difference it to get the signal
+df[‘signal’] = df[‘hold’].diff()</p>
+
+<h1 id="how-much-money-should-we-start-with-1">How much money should we start with?</h1>
+<p>initial_capital = 1000.0</p>
+
+<h1 id="construct-our-position-as-10-shares-depending-on-our-hold-1">Construct our position as 10 shares depending on our hold</h1>
+<p>shares = 10
+positions = df[‘hold’]*shares</p>
+
+<h1 id="compute-holdings-as-position-times-open-price-what-we-assume-1">Compute holdings as position times open price (what we assume</h1>
+<p># we buy and sell at)
+portfolio = pd.DataFrame()
+portfolio[‘holdings’] = positions.multiply(df[‘Open’], axis=0)</p>
+
+<h1 id="add-a-cash-column-to-our-portfolio-this-is-our-starting-1">Add a cash column to our portfolio. This is our starting</h1>
+<p># salary less the purchase or sale of assets
+portfolio[‘cash’] = initial_capital - positions.diff().fillna(0.0).multiply(df[‘Open’]).cumsum()</p>
+
+<h1 id="compute-the-portfolio-value-1">Compute the portfolio value</h1>
+<p>portfolio[‘total’] = portfolio[‘holdings’] +  portfolio[‘cash’]
+#portfolio[‘total’] = portfolio.sum(axis=1)
+# Compute percent returns per day and over the lifetime
+portfolio.fillna(0.0)
+portfolio[‘daily_ret’] = portfolio[‘total’].pct_change()
+portfolio[‘cum_ret’] = (1 + portfolio[‘daily_ret’]).cumprod()</p>
+
+<p>portfolio.total.plot()
+```</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>/home/tmabbot/anaconda3/lib/python3.6/site-packages/pandas/core/indexing.py:194: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: http://pandas.pydata.org/pandas-docs/stable/indexing.html#indexing-view-versus-copy
+  self._setitem_with_indexer(indexer, value)
+
+
+
+
+
+&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f387c32e320&gt;
+</code></pre>
+</div>
+
+<p><img src="notebook_files/notebook_4_2.png" alt="png" /></p>
+
+<p><code class="highlighter-rouge">python
+# What would we have earned if we bought and held?
+(df['Open'].iloc[-1] - df['Open'].iloc[0])/df['Open'].iloc[0]
+</code></p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>0.8190122413499754
+</code></pre>
+</div>
+
+<p>In addition, as the value of the portfolio rises, we are not fully invested:</p>
+
+<p><code class="highlighter-rouge">python
+portfolio.iloc[-100:-50]
+</code></p>
 
 <div>
 <style scoped="">
@@ -320,530 +266,452 @@ See the caveats in the documentation: http://pandas.pydata.org/pandas-docs/stabl
   <thead>
     <tr style="text-align: right;">
       <th></th>
-      <th>Open</th>
-      <th>High</th>
-      <th>Low</th>
-      <th>Close</th>
-      <th>Adj Close</th>
-      <th>Volume</th>
-      <th>MA20</th>
-      <th>MA30</th>
-      <th>hold</th>
-      <th>signal</th>
-      <th>returns</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>count</th>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1.511000e+03</td>
-      <td>1492.000000</td>
-      <td>1482.000000</td>
-      <td>1511.000000</td>
-      <td>1510.000000</td>
-      <td>1510.000000</td>
+      <th>holdings</th>
+      <th>cash</th>
+      <th>total</th>
+      <th>daily_ret</th>
+      <th>cum_ret</th>
     </tr>
     <tr>
-      <th>mean</th>
-      <td>11.408306</td>
-      <td>11.562780</td>
-      <td>11.234730</td>
-      <td>11.408578</td>
-      <td>10.969212</td>
-      <td>1.629695e+07</td>
-      <td>11.390446</td>
-      <td>11.380333</td>
-      <td>0.617472</td>
-      <td>0.000000</td>
-      <td>0.001461</td>
-    </tr>
-    <tr>
-      <th>std</th>
-      <td>6.706676</td>
-      <td>6.777988</td>
-      <td>6.626475</td>
-      <td>6.704299</td>
-      <td>6.454132</td>
-      <td>2.043763e+07</td>
-      <td>6.661313</td>
-      <td>6.636250</td>
-      <td>0.486165</td>
-      <td>0.199403</td>
-      <td>0.029676</td>
-    </tr>
-    <tr>
-      <th>min</th>
-      <td>3.246667</td>
-      <td>3.290000</td>
-      <td>3.069167</td>
-      <td>3.176667</td>
-      <td>3.049761</td>
-      <td>5.133000e+05</td>
-      <td>3.620750</td>
-      <td>3.754583</td>
-      <td>0.000000</td>
-      <td>-1.000000</td>
-      <td>-0.203593</td>
-    </tr>
-    <tr>
-      <th>25%</th>
-      <td>5.809583</td>
-      <td>5.923750</td>
-      <td>5.708333</td>
-      <td>5.837500</td>
-      <td>5.615202</td>
-      <td>4.844000e+06</td>
-      <td>5.863146</td>
-      <td>5.923722</td>
-      <td>0.000000</td>
-      <td>0.000000</td>
-      <td>-0.013581</td>
-    </tr>
-    <tr>
-      <th>50%</th>
-      <td>7.847500</td>
-      <td>7.914166</td>
-      <td>7.789166</td>
-      <td>7.853333</td>
-      <td>7.554271</td>
-      <td>8.530800e+06</td>
-      <td>7.713167</td>
-      <td>7.669708</td>
-      <td>1.000000</td>
-      <td>0.000000</td>
-      <td>0.003173</td>
-    </tr>
-    <tr>
-      <th>75%</th>
-      <td>17.971249</td>
-      <td>18.214999</td>
-      <td>17.618750</td>
-      <td>17.967499</td>
-      <td>17.283281</td>
-      <td>1.763700e+07</td>
-      <td>18.173906</td>
-      <td>18.315667</td>
-      <td>1.000000</td>
-      <td>0.000000</td>
-      <td>0.017199</td>
-    </tr>
-    <tr>
-      <th>max</th>
-      <td>24.232500</td>
-      <td>24.387501</td>
-      <td>24.090000</td>
-      <td>24.287500</td>
-      <td>23.362608</td>
-      <td>1.628244e+08</td>
-      <td>23.696125</td>
-      <td>23.583583</td>
-      <td>1.000000</td>
-      <td>1.000000</td>
-      <td>0.139339</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">old_df</span><span class="p">[</span><span class="s">'returns'</span><span class="p">]</span> <span class="o">=</span> <span class="n">old_df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">pct_change</span><span class="p">()</span>
-<span class="n">old_df</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div>
-<style scoped="">
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
+      <th>Date</th>
       <th></th>
-      <th>Open</th>
-      <th>High</th>
-      <th>Low</th>
-      <th>Close</th>
-      <th>Adj Close</th>
-      <th>Volume</th>
-      <th>MA20</th>
-      <th>MA30</th>
-      <th>hold</th>
-      <th>signal</th>
-      <th>returns</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>count</th>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1.511000e+03</td>
-      <td>1492.000000</td>
-      <td>1482.000000</td>
-      <td>1511.000000</td>
-      <td>1510.000000</td>
-      <td>1510.000000</td>
-    </tr>
-    <tr>
-      <th>mean</th>
-      <td>157.169087</td>
-      <td>157.960073</td>
-      <td>156.287187</td>
-      <td>157.188306</td>
-      <td>141.653301</td>
-      <td>1.542182e+08</td>
-      <td>157.143042</td>
-      <td>157.131564</td>
-      <td>0.617472</td>
-      <td>0.000000</td>
-      <td>0.000442</td>
-    </tr>
-    <tr>
-      <th>std</th>
-      <td>34.597348</td>
-      <td>34.632406</td>
-      <td>34.556015</td>
-      <td>34.587543</td>
-      <td>35.972881</td>
-      <td>7.941822e+07</td>
-      <td>34.348054</td>
-      <td>34.202013</td>
-      <td>0.486165</td>
-      <td>0.192641</td>
-      <td>0.009563</td>
-    </tr>
-    <tr>
-      <th>min</th>
-      <td>103.110001</td>
-      <td>103.419998</td>
-      <td>101.129997</td>
-      <td>102.199997</td>
-      <td>86.912712</td>
-      <td>3.731780e+07</td>
-      <td>106.830999</td>
-      <td>107.953333</td>
-      <td>0.000000</td>
-      <td>-1.000000</td>
-      <td>-0.058055</td>
-    </tr>
-    <tr>
-      <th>25%</th>
-      <td>128.000000</td>
-      <td>128.629997</td>
-      <td>127.114998</td>
-      <td>127.909999</td>
-      <td>110.723652</td>
-      <td>1.017476e+08</td>
-      <td>128.685625</td>
-      <td>128.758750</td>
-      <td>0.000000</td>
-      <td>0.000000</td>
-      <td>-0.004562</td>
-    </tr>
-    <tr>
-      <th>50%</th>
-      <td>146.289993</td>
-      <td>146.809998</td>
-      <td>145.699997</td>
-      <td>146.589996</td>
-      <td>130.552017</td>
-      <td>1.359112e+08</td>
-      <td>145.353251</td>
-      <td>145.129667</td>
-      <td>1.000000</td>
-      <td>0.000000</td>
-      <td>0.001093</td>
-    </tr>
-    <tr>
-      <th>75%</th>
-      <td>192.944999</td>
-      <td>194.250000</td>
-      <td>191.710000</td>
-      <td>192.884995</td>
-      <td>178.646782</td>
-      <td>1.845270e+08</td>
-      <td>193.961375</td>
-      <td>194.741582</td>
-      <td>1.000000</td>
-      <td>0.000000</td>
-      <td>0.005664</td>
-    </tr>
-    <tr>
-      <th>max</th>
-      <td>213.240005</td>
-      <td>213.779999</td>
-      <td>212.910004</td>
-      <td>213.500000</td>
-      <td>200.218155</td>
-      <td>7.178287e+08</td>
-      <td>211.746502</td>
-      <td>211.344001</td>
-      <td>1.000000</td>
-      <td>1.000000</td>
-      <td>0.045382</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<p>Let’s try FAS, that’s always been a favorite of mine.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">old_df2</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="c"># Download data</span>
-<span class="n">symbol</span> <span class="o">=</span> <span class="s">'FAS'</span>
-<span class="n">start_date</span> <span class="o">=</span> <span class="s">'2010-01-01'</span>
-<span class="n">end_date</span> <span class="o">=</span> <span class="s">'2016-01-01'</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_data_yahoo</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">start_date</span><span class="p">,</span> <span class="n">end_date</span><span class="p">)</span>
-
-<span class="c"># Set some parameters</span>
-<span class="n">short_average</span> <span class="o">=</span> <span class="mi">20</span>
-<span class="n">long_average</span> <span class="o">=</span> <span class="mi">30</span>
-
-<span class="c"># Compute the moving averages and add to dataframe</span>
-<span class="c"># We'll base them on the open</span>
-<span class="n">ma_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">'MA'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">short_average</span><span class="p">),</span> <span class="s">'MA'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">long_average</span><span class="p">)]</span>
-<span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">short_average</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-<span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">long_average</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-
-<span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="c"># We want to hold the stock when the short is above the long</span>
-<span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:]</span> <span class="o">=</span> \
-    <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:]</span> <span class="o">&gt;</span>
-             <span class="n">df</span><span class="p">[</span><span class="n">ma_columns</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">long_average</span><span class="p">:],</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<span class="c"># We buy/sell when this holding changes, so we can simply</span>
-<span class="c"># first difference it to get the signal</span>
-<span class="n">df</span><span class="p">[</span><span class="s">'signal'</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span>
-
-<span class="c"># How much money should we start with?</span>
-<span class="n">initial_capital</span> <span class="o">=</span> <span class="mf">10000.0</span>
-
-<span class="c"># Construct our position as 10 shares depending on our hold</span>
-<span class="n">shares</span> <span class="o">=</span> <span class="mi">10</span>
-<span class="n">positions</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'hold'</span><span class="p">]</span><span class="o">*</span><span class="n">shares</span>
-
-<span class="c"># Compute holdings as position times open price (what we assume</span>
-<span class="c"># we buy and sell at)</span>
-<span class="n">portfolio</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'holdings'</span><span class="p">]</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-
-<span class="c"># Add a cash column to our portfolio. This is our starting</span>
-<span class="c"># salary less the purchase or sale of assets</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'cash'</span><span class="p">]</span> <span class="o">=</span> <span class="n">initial_capital</span> <span class="o">-</span> <span class="p">(</span><span class="n">positions</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="p">))</span><span class="o">.</span><span class="n">cumsum</span><span class="p">()</span>
-
-<span class="c"># Compute the portfolio value</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'total'</span><span class="p">]</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
-<span class="c"># Compute percent returns per day and over the lifetime</span>
-<span class="n">portfolio</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'daily_ret'</span><span class="p">]</span> <span class="o">=</span> <span class="n">portfolio</span><span class="p">[</span><span class="s">'total'</span><span class="p">]</span><span class="o">.</span><span class="n">pct_change</span><span class="p">()</span>
-<span class="n">portfolio</span><span class="p">[</span><span class="s">'cum_ret'</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">portfolio</span><span class="p">[</span><span class="s">'daily_ret'</span><span class="p">])</span><span class="o">.</span><span class="n">cumprod</span><span class="p">()</span>
-
-<span class="n">portfolio</span><span class="o">.</span><span class="n">total</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[*********************100%***********************]  1 of 1 downloaded
-
-
-/home/tmabbot/anaconda3/lib/python3.5/site-packages/pandas/core/indexing.py:189: SettingWithCopyWarning:
-A value is trying to be set on a copy of a slice from a DataFrame
-
-See the caveats in the documentation: http://pandas.pydata.org/pandas-docs/stable/indexing.html#indexing-view-versus-copy
-  self._setitem_with_indexer(indexer, value)
-
-
-
-
-
-&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9caffd31d0&gt;
-</code></pre></div></div>
-
-<p><img src="/images/MA_Crossover_files/MA_Crossover_27_3.png" alt="png" /></p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="o">.</span><span class="n">Open</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.axes._subplots.AxesSubplot at 0x7f9cb02af9b0&gt;
-</code></pre></div></div>
-
-<p><img src="/images/MA_Crossover_files/MA_Crossover_28_1.png" alt="png" /></p>
-
-<p>Now we have a higher standard devation of returns, but fewer signals.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">[</span><span class="s">'returns'</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">'Open'</span><span class="p">]</span><span class="o">.</span><span class="n">pct_change</span><span class="p">()</span>
-<span class="n">df</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div>
-<style scoped="">
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
       <th></th>
-      <th>Open</th>
-      <th>High</th>
-      <th>Low</th>
-      <th>Close</th>
-      <th>Adj Close</th>
-      <th>Volume</th>
-      <th>MA20</th>
-      <th>MA30</th>
-      <th>hold</th>
-      <th>signal</th>
-      <th>returns</th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>count</th>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1511.000000</td>
-      <td>1.511000e+03</td>
-      <td>1492.000000</td>
-      <td>1482.000000</td>
-      <td>1511.000000</td>
-      <td>1510.000000</td>
-      <td>1510.000000</td>
+      <th>2015-08-11</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>mean</th>
-      <td>16.602262</td>
-      <td>16.865027</td>
-      <td>16.303415</td>
-      <td>16.598586</td>
-      <td>16.509553</td>
-      <td>5.983241e+07</td>
-      <td>16.555300</td>
-      <td>16.529034</td>
-      <td>0.605559</td>
-      <td>0.000000</td>
-      <td>0.001362</td>
+      <th>2015-08-12</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>std</th>
-      <td>8.901980</td>
-      <td>8.991473</td>
-      <td>8.801324</td>
-      <td>8.900268</td>
-      <td>8.853954</td>
-      <td>6.726758e+07</td>
-      <td>8.845363</td>
-      <td>8.811128</td>
-      <td>0.488892</td>
-      <td>0.185634</td>
-      <td>0.036705</td>
+      <th>2015-08-13</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>min</th>
-      <td>3.704170</td>
-      <td>4.270000</td>
-      <td>3.512500</td>
-      <td>3.895830</td>
-      <td>3.875219</td>
-      <td>4.269000e+05</td>
-      <td>4.709791</td>
-      <td>4.936805</td>
-      <td>0.000000</td>
-      <td>-1.000000</td>
-      <td>-0.199999</td>
+      <th>2015-08-14</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>25%</th>
-      <td>9.171250</td>
-      <td>9.336250</td>
-      <td>8.964585</td>
-      <td>9.206250</td>
-      <td>9.157543</td>
-      <td>8.640600e+06</td>
-      <td>9.169813</td>
-      <td>9.089792</td>
-      <td>0.000000</td>
-      <td>0.000000</td>
-      <td>-0.016926</td>
+      <th>2015-08-17</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>50%</th>
-      <td>13.200000</td>
-      <td>13.433330</td>
-      <td>12.925000</td>
-      <td>13.275000</td>
-      <td>13.196481</td>
-      <td>3.552120e+07</td>
-      <td>13.213667</td>
-      <td>13.115555</td>
-      <td>1.000000</td>
-      <td>0.000000</td>
-      <td>0.002385</td>
+      <th>2015-08-18</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>75%</th>
-      <td>24.281250</td>
-      <td>24.731251</td>
-      <td>23.852500</td>
-      <td>24.246249</td>
-      <td>24.117971</td>
-      <td>8.742720e+07</td>
-      <td>24.565094</td>
-      <td>24.789334</td>
-      <td>1.000000</td>
-      <td>0.000000</td>
-      <td>0.020626</td>
+      <th>2015-08-19</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
     <tr>
-      <th>max</th>
-      <td>35.660000</td>
-      <td>35.730000</td>
-      <td>34.930000</td>
-      <td>35.540001</td>
-      <td>35.351974</td>
-      <td>6.186756e+08</td>
-      <td>34.588000</td>
-      <td>34.293333</td>
-      <td>1.000000</td>
-      <td>1.000000</td>
-      <td>0.185468</td>
+      <th>2015-08-20</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-21</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-24</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-25</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-26</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-27</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-28</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-08-31</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-01</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-02</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-03</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-04</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-08</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-09</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-10</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-11</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-14</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-15</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-16</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-17</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-18</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-21</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-22</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-23</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-24</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-25</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-28</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-29</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-09-30</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-01</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-02</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-05</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-06</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-07</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-08</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-09</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-12</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-13</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-14</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-15</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-16</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-19</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
+    </tr>
+    <tr>
+      <th>2015-10-20</th>
+      <td>0.0</td>
+      <td>1510.29953</td>
+      <td>1510.29953</td>
+      <td>0.0</td>
+      <td>1.5103</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-<p>Oh well, in any case this is a  pretty naive strategy and doesn’t take into account lower latency signal. For instance we seem to lose money at the start, but we are ignoring that thelong run trend is negative. Perhaps a mix could help this. Ok, I’m stopping here, but it was fun!</p>
+<p><code class="highlighter-rouge">python
+# To see how this works we can plot our processes and signal
+below = 0
+truncate=1500
+fig, ax = plt.subplots(1, 1)
+df[['Open', ma_columns[0], ma_columns[1], ma_columns[2]]].iloc[below:truncate].plot(ax=ax)
+ax.plot(df.loc[df.signal==1.0].index,
+        df[ma_columns[0]].loc[df.signal==1.0],
+       '^', color='g', markersize=10)
+ax.plot(df.loc[df.signal==-1.0].index,
+        df[ma_columns[0]].loc[df.signal==-1.0],
+       'v', color='r', markersize=10)
+ax.set_ylim(100, 220)
+ax.set_xlim(df.index[below], df.index[truncate])
+plt.show()
+</code></p>
+
+<p><img src="notebook_files/notebook_8_0.png" alt="png" /></p>
+
+<p>Now we are only buying and selling on up-trends. One thing that still confuses me is why this strategy wouldn’t make as much as if we just invested everything from the start and held on…</p>
 
         </section>
         
         <footer>
             
-            <a href="/update/2018/08/09/python.html" class="float-left">&larr; Previous post</a> 
+            <a href="/update/2018/08/10/backtrader.html" class="float-left">&larr; Previous post</a> 
             
         </footer>
 
